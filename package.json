@@ -1,7 +1,7 @@
 {
   "name": "meditation",
   "scripts": {
-    "dev": "bun run --hot src/index.ts"
+    "dev": "bun run --hot src/api/index.ts"
   },
   "type": "module",
   "dependencies": {
