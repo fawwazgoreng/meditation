@@ -4,7 +4,7 @@ import { fetchTopLanguages, fetchUserStats, fetchStreak } from "./lib/github";
 import { buildTopLangsSVG, buildStreakSVG, buildCardSVG } from "./lib/svg";
 import { chooseTheme } from "./lib/theme";
 
-const app = new Hono();
+const app = new Hono().basePath("/api");
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
