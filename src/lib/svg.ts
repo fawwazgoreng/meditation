@@ -1,4 +1,5 @@
-// ─── Types ────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 export type Theme = {
   name: string;
   bg: string;
@@ -11,338 +12,157 @@ export type Theme = {
   green?: string;
 };
 
-export interface Language {
+export type Language = {
   name: string;
   percent: number;
   color: string;
-}
+};
 
-export interface UserStats {
+export type UserStats = {
   login: string;
   publicRepos: number;
   stars: number;
   followers: number;
   following: number;
-}
+};
 
-export interface StreakData {
+export type StreakData = {
   totalContributions: number;
   currentStreak: number;
   longestStreak: number;
   firstContrib: string;
   lastContrib: string;
-}
+};
 
-// ─── Helpers ───────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Escape special characters for XML/SVG safety */
 function escXml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return str.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[m] || m));
 }
 
+/** Format ISO date to US human-readable format */
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/** Format large numbers with 'k' suffix */
 function fmtNum(n: number): string {
-  return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
-// ─── Theme Picker ─────────────────────────────────────────
-export function getTheme(name: string, themes: Theme[]): Theme {
-  for (var i = 0; i < themes.length; i++) {
-    if (themes[i].name === name) return themes[i];
-  }
-  return themes[0];
+// ─── SVG Shell ───────────────────────────────────────────────────────────────
+
+/** Wrap content in a styled SVG container with filters and gradients */
+function shell(w: number, h: number, children: string, theme: Theme): string {
+  const glowId = `glow-${theme.name}`;
+  const gradId = `grad-${theme.name}`;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <defs>
+    <style>
+      .font { font-family: 'Segoe UI', system-ui, sans-serif; }
+      .bold { font-weight: 700; }
+      .anim-fade { animation: fadeIn 0.8s ease-in-out; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+    <filter id="${glowId}" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${theme.bg}" />
+      <stop offset="100%" stop-color="${theme.bg}" stop-opacity="0.8" />
+    </linearGradient>
+  </defs>
+  <rect width="${w}" height="${h}" rx="14" fill="url(#${gradId})" stroke="${theme.border}" stroke-width="1.5"/>
+  <circle cx="${w}" cy="${h}" r="50" fill="${theme.accent}" opacity="0.05"/>
+  <g class="font anim-fade">${children}</g>
+</svg>`;
 }
 
-// ─── SVG Shell ─────────────────────────────────────────────
-var FONT = "font-family:'Segoe UI',system-ui,sans-serif";
+// ─── Builders ────────────────────────────────────────────────────────────────
 
-function shell(
-  w: number,
-  h: number,
-  children: string,
-  theme: Theme
-): string {
-  return (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="' +
-    w +
-    '" height="' +
-    h +
-    '" ' +
-    FONT +
-    ">" +
-    '<rect width="' +
-    w +
-    '" height="' +
-    h +
-    '" rx="12" fill="' +
-    theme.bg +
-    '" stroke="' +
-    theme.border +
-    '" stroke-width="1"/>' +
-    children +
-    "</svg>"
-  );
+/** Build SVG for top used languages with progress bar */
+export function buildTopLangsSVG(langs: Language[], theme: Theme): string {
+  const W = 350, PX = 25, BAR_W = W - (PX * 2);
+  const H = 100 + (langs.length * 25);
+  let currentX = 0;
+
+  const progressBars = langs.map(l => {
+    const width = (l.percent / 100) * BAR_W;
+    const res = `<rect x="${PX + currentX}" y="65" width="${width}" height="10" fill="${l.color}"/>`;
+    currentX += width;
+    return res;
+  }).join('');
+
+  const list = langs.map((l, i) => {
+    const y = 105 + (i * 22);
+    return `<circle cx="${PX + 5}" cy="${y - 4}" r="5" fill="${l.color}"/>
+            <text x="${PX + 18}" y="${y}" font-size="12" fill="${theme.text}">${escXml(l.name)}</text>
+            <text x="${W - PX}" y="${y}" font-size="12" fill="${theme.muted}" text-anchor="end">${l.percent}%</text>`;
+  }).join('');
+
+  return shell(W, H, `
+    <text x="${PX}" y="35" font-size="16" class="bold" fill="${theme.title}">Top Languages</text>
+    <rect x="${PX}" y="65" width="${BAR_W}" height="10" rx="5" fill="${theme.border}" opacity="0.3"/>
+    <g rx="5" clip-path="inset(0% round 5px)">${progressBars}</g>
+    ${list}
+  `, theme);
 }
 
-// ─── Top Languages ─────────────────────────────────────────
-export function buildTopLangsSVG(
-  langs: Language[],
-  theme: Theme
-): string {
-  var W = 350;
-  var PX = 20;
-  var BAR_W = W - PX * 2;
-  var ROW_H = 22;
+/** Build SVG for contribution streaks with glowing accent */
+export function buildStreakSVG(data: StreakData, theme: Theme): string {
+  const W = 350, H = 140, glowId = `glow-${theme.name}`;
 
-  var H = 30 + 14 + 20 + ROW_H + langs.length * ROW_H + PX;
+  const cells = [
+    { x: 58, val: data.totalContributions, label: 'Total', sub: 'Contributions' },
+    { x: 175, val: data.currentStreak, label: 'Current', sub: '🔥 Streak', highlight: true },
+    { x: 292, val: data.longestStreak, label: 'Longest', sub: 'Best Day' }
+  ].map(c => `
+    <g transform="translate(${c.x}, 0)">
+      <text y="55" font-size="28" class="bold" fill="${c.highlight ? theme.accent : theme.title}" 
+            text-anchor="middle" ${c.highlight ? `filter="url(#${glowId})"` : ''}>${fmtNum(c.val)}</text>
+      <text y="78" font-size="11" class="bold" fill="${theme.text}" text-anchor="middle">${c.label}</text>
+      <text y="95" font-size="9" fill="${theme.muted}" text-anchor="middle">${c.sub}</text>
+    </g>`).join('');
 
-  var barX = PX;
-  var segments = "";
+  const footer = `<line x1="20" y1="115" x2="${W - 20}" y2="115" stroke="${theme.border}" stroke-dasharray="4"/>
+                  <text x="175" y="128" font-size="8" fill="${theme.muted}" text-anchor="middle" opacity="0.6">
+                    ${fmtDate(data.firstContrib)} — Present
+                  </text>`;
 
-  for (var i = 0; i < langs.length; i++) {
-    var l = langs[i];
-    var width = Math.max((l.percent / 100) * BAR_W, 0);
-
-    segments +=
-      '<rect x="' +
-      barX.toFixed(2) +
-      '" y="60" width="' +
-      width.toFixed(2) +
-      '" height="8" fill="' +
-      l.color +
-      '"/>';
-
-    barX += width;
-  }
-
-  var firstCol = langs.length ? langs[0].color : theme.border;
-  var lastCol = langs.length
-    ? langs[langs.length - 1].color
-    : theme.border;
-
-  var caps =
-    '<rect x="' +
-    PX +
-    '" y="60" width="6" height="8" rx="4" fill="' +
-    firstCol +
-    '"/>' +
-    '<rect x="' +
-    (PX + BAR_W - 6).toFixed(2) +
-    '" y="60" width="6" height="8" rx="4" fill="' +
-    lastCol +
-    '"/>';
-
-  var rows = "";
-
-  for (var j = 0; j < langs.length; j++) {
-    var lang = langs[j];
-    var y = 110 + j * ROW_H;
-
-    rows +=
-      '<circle cx="' +
-      (PX + 6) +
-      '" cy="' +
-      (y - 4) +
-      '" r="5" fill="' +
-      lang.color +
-      '"/>' +
-      '<text x="' +
-      (PX + 18) +
-      '" y="' +
-      y +
-      '" font-size="12" fill="' +
-      theme.text +
-      '">' +
-      escXml(lang.name) +
-      "</text>" +
-      '<text x="' +
-      (W - PX) +
-      '" y="' +
-      y +
-      '" font-size="12" fill="' +
-      theme.muted +
-      '" text-anchor="end">' +
-      lang.percent +
-      "%</text>";
-  }
-
-  var children =
-    '<text x="' +
-    PX +
-    '" y="34" font-size="14" font-weight="600" fill="' +
-    theme.title +
-    '">Most Used Languages</text>' +
-    segments +
-    caps +
-    '<rect x="' +
-    PX +
-    '" y="60" width="' +
-    BAR_W +
-    '" height="8" rx="4" fill="none" stroke="' +
-    theme.border +
-    '" stroke-width="0.5"/>' +
-    rows;
-
-  return shell(W, H, children, theme);
+  return shell(W, H, cells + footer, theme);
 }
 
-// ─── Streak ────────────────────────────────────────────────
-export function buildStreakSVG(
-  data: StreakData,
-  theme: Theme
-): string {
-  var W = 350;
-  var H = 130;
-
-  var fireColor = theme.fire || "#FF6B35";
-
-  var cols = [
-    {
-      x: 58,
-      val: data.totalContributions,
-      label: "Total Contributions",
-      sub: fmtDate(data.firstContrib) + " - Present",
-      color: theme.title,
-    },
-    {
-      x: 175,
-      val: data.currentStreak,
-      label: "Current Streak",
-      sub:
-        data.currentStreak > 0
-          ? "🔥 Meditation in progress"
-          : "Time to focus",
-      color: fireColor,
-    },
-    {
-      x: 292,
-      val: data.longestStreak,
-      label: "Longest Streak",
-      sub: data.longestStreak + " days",
-      color: theme.title,
-    },
+/** Build SVG for general user statistics grid */
+export function buildCardSVG(stats: UserStats, theme: Theme, extra: any[] = []): string {
+  const W = 350, PX = 25, COLS = 2, ROW_H = 40;
+  const items = [
+    { label: 'Public Repos', value: stats.publicRepos, icon: '📦' },
+    { label: 'Stars Earned', value: stats.stars, icon: '⭐' },
+    { label: 'Followers', value: stats.followers, icon: '👥' },
+    { label: 'Following', value: stats.following, icon: '✨' },
+    ...extra
   ];
+  const H = 80 + Math.ceil(items.length / COLS) * ROW_H;
 
-  var content = "";
+  const grid = items.map((item, i) => {
+    const x = (i % COLS) === 1 ? 190 : PX;
+    const y = 75 + Math.floor(i / COLS) * ROW_H;
+    return `<g transform="translate(${x},${y})">
+              <text font-size="11" fill="${theme.muted}">${item.icon ?? ''} ${escXml(item.label)}</text>
+              <text y="20" font-size="18" class="bold" fill="${theme.text}">${fmtNum(Number(item.value))}</text>
+            </g>`;
+  }).join('');
 
-  for (var i = 0; i < cols.length; i++) {
-    var c = cols[i];
-
-    content +=
-      '<text x="' +
-      c.x +
-      '" y="48" font-size="26" font-weight="700" fill="' +
-      c.color +
-      '" text-anchor="middle">' +
-      fmtNum(c.val) +
-      "</text>" +
-      '<text x="' +
-      c.x +
-      '" y="68" font-size="10" font-weight="600" fill="' +
-      theme.text +
-      '" text-anchor="middle">' +
-      c.label +
-      "</text>" +
-      '<text x="' +
-      c.x +
-      '" y="88" font-size="9" fill="' +
-      theme.muted +
-      '" text-anchor="middle">' +
-      escXml(c.sub) +
-      "</text>";
-  }
-
-  var dividers =
-    '<line x1="117" y1="30" x2="117" y2="100" stroke="' +
-    theme.border +
-    '" stroke-width="1"/>' +
-    '<line x1="233" y1="30" x2="233" y2="100" stroke="' +
-    theme.border +
-    '" stroke-width="1"/>';
-
-  return shell(W, H, dividers + content, theme);
-}
-
-// ─── Card ─────────────────────────────────────────────────
-export function buildCardSVG(
-  stats: UserStats,
-  theme: Theme
-): string {
-  var W = 350;
-  var H = 160;
-  var PX = 25;
-
-  var greenColor = theme.green || "#3FB950";
-
-  var items = [
-    { label: "Public Repos", value: fmtNum(stats.publicRepos), icon: "📦" },
-    { label: "Stars Earned", value: fmtNum(stats.stars), icon: "⭐" },
-    { label: "Followers", value: fmtNum(stats.followers), icon: "👥" },
-    { label: "Following", value: fmtNum(stats.following), icon: "✨" },
-  ];
-
-  var grid = "";
-
-  for (var i = 0; i < items.length; i++) {
-    var item = items[i];
-    var x = i % 2 ? 190 : PX;
-    var y = i >= 2 ? 115 : 75;
-
-    grid +=
-      '<g transform="translate(' +
-      x +
-      "," +
-      y +
-      ')">' +
-      '<text font-size="11" fill="' +
-      theme.muted +
-      '">' +
-      item.icon +
-      " " +
-      escXml(item.label) +
-      "</text>" +
-      '<text y="20" font-size="18" font-weight="700" fill="' +
-      theme.text +
-      '">' +
-      item.value +
-      "</text></g>";
-  }
-
-  var divider =
-    '<line x1="175" y1="65" x2="175" y2="' +
-    (H - 25) +
-    '" stroke="' +
-    theme.border +
-    '" stroke-width="1" stroke-dasharray="2"/>';
-
-  var children =
-    '<g transform="translate(' +
-    PX +
-    ',35)">' +
-    '<text font-size="16" font-weight="700" fill="' +
-    theme.title +
-    '">GitHub Stats</text>' +
-    '<text y="18" font-size="12" fill="' +
-    theme.muted +
-    '">@' +
-    escXml(stats.login) +
-    " — Reflecting Progress</text></g>" +
-    divider +
-    grid +
-    '<circle cx="' +
-    (W - 20) +
-    '" cy="20" r="3" fill="' +
-    greenColor +
-    '" opacity="0.6"/>';
-
-  return shell(W, H, children, theme);
+  return shell(W, H, `
+    <g transform="translate(${PX},35)">
+      <text font-size="16" class="bold" fill="${theme.title}">GitHub Stats</text>
+      <text y="18" font-size="12" fill="${theme.muted}">@${escXml(stats.login)} — Progress Card</text>
+    </g>
+    <line x1="175" y1="65" x2="175" y2="${H - 20}" stroke="${theme.border}" stroke-width="1" stroke-dasharray="2"/>
+    ${grid}
+    <circle cx="${W - 20}" cy="20" r="3" fill="${theme.green ?? '#3FB950'}" opacity="0.6"/>
+  `, theme);
 }

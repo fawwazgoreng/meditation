@@ -1,4 +1,5 @@
-// ─── Theme Type ────────────────────────────────────────────
+// ─── Theme Type ──────────────────────────────────────────────────────────────
+
 export type Theme = {
     name: string;
     bg: string;
@@ -9,7 +10,8 @@ export type Theme = {
     accent: string;
 };
 
-// ─── Theme Collection (Array) ──────────────────────────────
+// ─── Theme Collection ────────────────────────────────────────────────────────
+
 export const THEMES: Theme[] = [
     {
         name: "dark",
@@ -29,6 +31,35 @@ export const THEMES: Theme[] = [
         title: "#0969DA",
         accent: "#1F6FEB",
     },
+    // ─── Manhwa Inspired Themes ───
+    {
+        name: "orv",
+        bg: "#050B16", // Nebula void space
+        border: "#1E293B",
+        text: "#E2E8F0", // Starlight white
+        muted: "#64748B",
+        title: "#FACC15", // Gold [Fable] grade
+        accent: "#38BDF8", // Transcendence blue
+    },
+    {
+        name: "pickmeup",
+        bg: "#0A0A0B", // Dark game UI
+        border: "#27272A",
+        text: "#FAFAFA",
+        muted: "#71717A",
+        title: "#0EA5E9", // Mana interface blue
+        accent: "#EF4444", // Combat/Gacha red
+    },
+    {
+        name: "northernblade",
+        bg: "#050505", // Pitch black ink
+        border: "#1F2937", // Blade steel grey
+        text: "#F3F4F6", // Northern snow white
+        muted: "#6B7280",
+        title: "#8B5CF6", // Silent Night purple
+        accent: "#6366F1", // Sharp indigo
+    },
+    // ─── Standard Themes ───
     {
         name: "galaxy",
         bg: "#0B0F1A",
@@ -101,8 +132,6 @@ export const THEMES: Theme[] = [
         title: "#38BDF8",
         accent: "#0EA5E9",
     },
-
-    // ─── ✨ Tambahan Theme Baru ──────────────────────────────
     {
         name: "sunset",
         bg: "#1A0F1F",
@@ -139,10 +168,30 @@ export const THEMES: Theme[] = [
         title: "#D4A373",
         accent: "#B08968",
     },
+    {
+        name: "stoic",
+        bg: "#000000",
+        border: "#222222",
+        text: "#FFFFFF",
+        muted: "#666666",
+        title: "#FFFFFF",
+        accent: "#FFFFFF",
+    },
+    {
+        name: "zen",
+        bg: "#FDFCF0",
+        border: "#E2E2D0",
+        text: "#2F2F2F",
+        muted: "#717171",
+        title: "#1A1A1A",
+        accent: "#434343",
+    },
 ];
 
-export const chooseTheme = (choice?: string) => {
-    return (
-        THEMES.find((t) => t.name === choice) ?? THEMES[0] // fallback ke default (dark)
-    );
+/** Select theme by name or return default dark theme */
+export const chooseTheme = (choice?: string | null): Theme => {
+    const name = (choice || "dark").toLowerCase().trim();
+    
+    // Find matching theme or fallback to the first one (dark)
+    return THEMES.find((t) => t.name === name) || THEMES[0];
 };

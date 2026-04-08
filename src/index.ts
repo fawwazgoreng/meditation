@@ -1,111 +1,98 @@
-import { Hono } from 'hono'
-import { cacheGet, cacheSet } from './lib/cache'
-import { fetchTopLanguages, fetchUserStats, fetchStreak } from './lib/github'
-import { buildTopLangsSVG, buildStreakSVG, buildCardSVG } from './lib/svg'
+import { Hono } from "hono";
+import { cacheGet, cacheSet } from "./lib/cache";
+import { fetchTopLanguages, fetchUserStats, fetchStreak } from "./lib/github";
+import { buildTopLangsSVG, buildStreakSVG, buildCardSVG } from "./lib/svg";
+import { chooseTheme } from "./lib/theme";
 
-const app = new Hono()
+const app = new Hono();
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type AppContext = { user: string; themeName: string | null };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Parse ?user= and return 400 if missing */
-function getUser(c: any): string | null {
-  return c.req.query('user') ?? null
+/** Extract query parameters from request */
+function getParams(c: any): AppContext | null {
+  const user = c.req.query("user");
+  const themeName = c.req.query("theme");
+
+  // Validate user presence and non-empty string
+  if (!user || typeof user !== "string" || user.trim() === "") return null;
+
+  return { 
+    user: user.trim(), 
+    themeName: themeName || null 
+  };
 }
 
-/** Return SVG response with caching headers */
+/** Return SVG body with optimized caching headers */
 function svgResponse(c: any, svg: string) {
   return c.body(svg, 200, {
-    'Content-Type': 'image/svg+xml; charset=utf-8',
-    'Cache-Control': 'public, max-age=3600, s-maxage=3600',
-  })
+    "Content-Type": "image/svg+xml; charset=utf-8",
+    "Cache-Control": "public, max-age=3600, s-maxage=3600",
+    "X-Content-Type-Options": "nosniff",
+  });
 }
 
-/** Wrap route handler with cache + error handling */
-async function withCache(
+/** Core abstraction for cache, fetch, and SVG generation */
+async function handleRequest(
   c: any,
-  key: string,
-  build: () => Promise<string>
+  type: "stats" | "streak" | "card",
+  fetcher: (user: string) => Promise<any>,
+  builder: (data: any, theme: any) => string
 ) {
-  const hit = cacheGet(key)
-  if (hit) return svgResponse(c, hit)
+  const params = getParams(c);
+
+  // Return 400 if user parameter is missing
+  if (!params) {
+    return c.text("Error: Parameter 'user' is required.", 400);
+  }
+
+  const cacheKey = `${type}:${params.user}:${params.themeName || "default"}`;
 
   try {
-    const svg = await build()
-    cacheSet(key, svg)
-    return svgResponse(c, svg)
+    // Check if SVG is already stored in local cache
+    const hit = cacheGet(cacheKey);
+    if (hit) return svgResponse(c, hit);
+
+    // Get theme object based on name or fallback to default
+    const theme = chooseTheme(params.themeName);
+
+    // Fetch data from GitHub API
+    const data = await fetcher(params.user);
+    if (!data) throw new Error(`User data not found for: ${params.user}`);
+
+    // Generate SVG string using the specific builder
+    const svg = builder(data, theme);
+
+    // Save generated SVG to cache and return response
+    cacheSet(cacheKey, svg);
+    return svgResponse(c, svg);
+
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown error'
-    console.error(`[${key}]`, msg)
-    return c.text(`Error: ${msg}`, 502)
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error(`[${type.toUpperCase()} ERROR]`, msg);
+    return c.text(`Meditation Error: ${msg}`, 502);
   }
 }
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
-/**
- * GET /stats?user=<username>
- * Returns a top languages bar card as SVG.
- *
- * Usage in README:
- *   ![Top Langs](https://your-app.vercel.app/stats?user=fawwazgoreng)
- */
-app.get('/stats', async (c) => {
-  const user = getUser(c)
-  if (!user) return c.text('Missing ?user=', 400)
+/** Most used languages route */
+app.get("/stats", (c) => handleRequest(c, "stats", fetchTopLanguages, buildTopLangsSVG));
 
-  return withCache(c, `stats:${user}`, async () => {
-    const langs = await fetchTopLanguages(user)
-    return buildTopLangsSVG(langs)
-  })
-})
+/** GitHub contribution streak route */
+app.get("/streak", (c) => handleRequest(c, "streak", fetchStreak, buildStreakSVG));
 
-/**
- * GET /streak?user=<username>
- * Returns a commit streak card as SVG.
- *
- * Usage in README:
- *   ![Streak](https://your-app.vercel.app/streak?user=fawwazgoreng)
- */
-app.get('/streak', async (c) => {
-  const user = getUser(c)
-  if (!user) return c.text('Missing ?user=', 400)
+/** General user statistics card route */
+app.get("/card", (c) => handleRequest(c, "card", fetchUserStats, buildCardSVG));
 
-  return withCache(c, `streak:${user}`, async () => {
-    const data = await fetchStreak(user)
-    return buildStreakSVG(data)
-  })
-})
+/** API Info and health check */
+app.get("/", (c) => c.json({
+  status: "active",
+  project: "Meditation (Manhwa & Stoic Stats)",
+  endpoints: ["/stats", "/streak", "/card"]
+}));
 
-/**
- * GET /card?user=<username>
- * Returns a summary stats card (repos, stars, followers) as SVG.
- *
- * Usage in README:
- *   ![Card](https://your-app.vercel.app/card?user=fawwazgoreng)
- */
-app.get('/card', async (c) => {
-  const user = getUser(c)
-  if (!user) return c.text('Missing ?user=', 400)
-
-  return withCache(c, `card:${user}`, async () => {
-    const stats = await fetchUserStats(user)
-    return buildCardSVG(stats)
-  })
-})
-
-/**
- * GET /
- * Health check + available endpoints.
- */
-app.get('/', (c) => {
-  return c.json({
-    status: 'ok',
-    endpoints: {
-      '/stats?user=':  'Top languages bar card',
-      '/streak?user=': 'Commit streak card',
-      '/card?user=':   'Summary stats card',
-    },
-  })
-})
-
-export default app
+export default app;

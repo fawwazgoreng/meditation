@@ -1,4 +1,5 @@
 // ─── Types ───────────────────────────────────────────────────────────────────
+
 export interface Language {
   name: string;
   color: string;
@@ -22,207 +23,155 @@ export interface StreakData {
   lastContrib: string;
 }
 
-// ─── Top languages ───────────────────────────────────────────────────────────
+// ─── Config ──────────────────────────────────────────────────────────────────
 
-var GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 
-// ─── Headers ─────────────────────────────────────────────────────────────────
+/** Generate standard headers for GitHub API requests */
+const ghHeaders = () => ({
+  "Content-Type": "application/json",
+  "Authorization": GITHUB_TOKEN ? `Bearer ${GITHUB_TOKEN}` : "",
+  "User-Agent": "Meditation-App",
+});
 
-function ghHeaders(): Record<string, string> {
-  var headers: Record<string, string> = {
-    'Accept': 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-    'Content-Type': 'application/json'
-  };
-  if (GITHUB_TOKEN) {
-    headers['Authorization'] = 'Bearer ' + GITHUB_TOKEN;
-  }
-  return headers;
-}
-
-// ─── Helper Fetch (Simulasi asinkronus ES3 menggunakan Callback/Promise) ──────
-
-// Catatan: ES3 murni tidak punya Promise, tapi TS biasanya ditranspile ke 
-// fungsi yang mendukungnya. Kita gunakan sintaks fungsi biasa.
-
-export async function fetchTopLanguages(username: string): Promise<Language[]> {
-  var query = 'query($login: String!) { ' +
-    'user(login: $login) { ' +
-      'repositories(first: 100, ownerAffiliations: OWNER, isFork: false, privacy: PUBLIC) { ' +
-        'nodes { ' +
-          'languages(first: 10, orderBy: { field: SIZE, direction: DESC }) { ' +
-            'edges { size node { name color } } ' +
-          '} ' +
-        '} ' +
-      '} ' +
-    '} ' +
-  '}';
-
-  return fetch('https://api.github.com/graphql', {
-    method: 'POST',
+/** Generic helper to execute GitHub GraphQL queries */
+async function fetchGH(query: string, variables: object) {
+  const res = await fetch("https://api.github.com/graphql", {
+    method: "POST",
     headers: ghHeaders(),
-    body: JSON.stringify({ query: query, variables: { login: username } })
-  })
-  .then(function(res) { return res.json(); })
-  .then(function(result: any) {
-    var data = result.data;
-    var langs: Record<string, { size: number; color: string }> = {};
-    var nodes = data.user.repositories.nodes;
-    var total = 0;
-
-    for (var i = 0; i < nodes.length; i++) {
-      var edges = nodes[i].languages.edges;
-      for (var j = 0; j < edges.length; j++) {
-        var edge = edges[j];
-        var name = edge.node.name;
-        if (!langs[name]) {
-          langs[name] = { size: 0, color: edge.node.color || '#858585' };
-        }
-        langs[name].size += edge.size;
-        total += edge.size;
-      }
-    }
-
-    var resultList: Language[] = [];
-    var keys = Object.keys(langs);
-    
-    // Sort manual gaya ES3
-    keys.sort(function(a, b) {
-      return langs[b].size - langs[a].size;
-    });
-
-    var limit = keys.length > 8 ? 8 : keys.length;
-    for (var k = 0; k < limit; k++) {
-      var key = keys[k];
-      resultList.push({
-        name: key,
-        color: langs[key].color,
-        percent: parseFloat(((langs[key].size / total) * 100).toFixed(1))
-      });
-    }
-    return resultList;
+    body: JSON.stringify({ query, variables }),
   });
+
+  const result = (await res.json()) as any;
+  if (result.errors) throw new Error(result.errors[0].message);
+  if (!result.data || !result.data.user) throw new Error("User not found");
+  
+  return result.data.user;
 }
 
-// ─── Streak Logic (ES3 Friendly) ─────────────────────────────────────────────
+// ─── Functions ───────────────────────────────────────────────────────────────
 
-export async function fetchStreak(username: string): Promise<StreakData> {
-  return fetch('https://github.com/users/' + username + '/contributions')
-    .then(function(res) { return res.text(); })
-    .then(function(html) {
-      var dayRe = /data-count="(\d+)" data-date="(\d{4}-\d{2}-\d{2})"/g;
-      var days: Array<{ date: string; count: number }> = [];
-      var m;
-
-      while ((m = dayRe.exec(html)) !== null) {
-        days.push({ date: m[2], count: parseInt(m[1], 10) });
-      }
-
-      days.sort(function(a, b) { 
-        return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0); 
-      });
-
-      var today = new Date().toISOString().slice(0, 10);
-      var totalContributions = 0;
-      var longestStreak = 0;
-      var currentStreak = 0;
-      var run = 0;
-
-      for (var i = days.length - 1; i >= 0; i--) {
-        var d = days[i];
-        totalContributions += d.count;
-
-        if (d.count > 0) {
-          run++;
-          if (run > longestStreak) longestStreak = run;
-          if (currentStreak === run - 1) currentStreak = run;
-        } else {
-          if (d.date < today) run = 0;
+/** Fetch and calculate top programming languages used by user */
+export async function fetchTopLanguages(username: string): Promise<Language[]> {
+  const query = `
+    query($login: String!) {
+      user(login: $login) {
+        repositories(first: 100, ownerAffiliations: OWNER, isFork: false) {
+          nodes {
+            languages(first: 10, orderBy: { field: SIZE, direction: DESC }) {
+              edges { size node { name color } }
+            }
+          }
         }
       }
+    }
+  `;
 
-      // Pengganti .findLast (ES3 tidak punya)
-      var firstContrib = today;
-      var lastContrib = today;
+  const user = await fetchGH(query, { login: username });
+  const langs: Record<string, { size: number; color: string }> = {};
+  let totalSize = 0;
 
-      for (var n = 0; n < days.length; n++) {
-        if (days[n].count > 0) {
-          firstContrib = days[n].date;
-          break;
-        }
-      }
-      for (var x = days.length - 1; x >= 0; x--) {
-        if (days[x].count > 0) {
-          lastContrib = days[x].date;
-          break;
-        }
-      }
+  // Aggregate language sizes across all owned repositories
+  for (const repo of user.repositories.nodes) {
+    for (const edge of repo.languages.edges) {
+      const { name, color } = edge.node;
+      if (!langs[name]) langs[name] = { size: 0, color: color || "#858585" };
+      langs[name].size += edge.size;
+      totalSize += edge.size;
+    }
+  }
 
-      return {
-        currentStreak: currentStreak,
-        longestStreak: longestStreak,
-        totalContributions: totalContributions,
-        firstContrib: firstContrib,
-        lastContrib: lastContrib
-      };
-    });
+  // Sort by size and return top 8 languages with percentages
+  return Object.entries(langs)
+    .sort(([, a], [, b]) => b.size - a.size)
+    .slice(0, 8)
+    .map(([name, { size, color }]) => ({
+      name,
+      color,
+      percent: parseFloat(((size / totalSize) * 100).toFixed(1)),
+    }));
 }
 
-/**
- * Mengambil statistik profil user dan total stars.
- * Menggunakan sintaks ES3-compatible dengan Type Annotations TypeScript.
- */
+/** Fetch general profile statistics including followers and star counts */
 export async function fetchUserStats(username: string): Promise<UserStats> {
-  // Query GraphQL dalam bentuk string biasa (ES3 tidak mendukung backticks)
-  var query = 'query($login: String!) { ' +
-    'user(login: $login) { ' +
-      'name ' +
-      'login ' +
-      'followers { totalCount } ' +
-      'following  { totalCount } ' +
-      'repositories(first: 100, ownerAffiliations: OWNER, isFork: false) { ' +
-        'totalCount ' +
-        'nodes { stargazerCount } ' +
-      '} ' +
-    '} ' +
-  '}';
-
-  return fetch('https://api.github.com/graphql', {
-    method: 'POST',
-    headers: ghHeaders(), // Memanggil fungsi helper headers yang sudah dibuat sebelumnya
-    body: JSON.stringify({ 
-      query: query, 
-      variables: { login: username } 
-    })
-  })
-  .then(function(res) {
-    if (!res.ok) {
-      throw new Error('GitHub GraphQL ' + res.status);
+  const query = `
+    query($login: String!) {
+      user(login: $login) {
+        name login
+        followers { totalCount }
+        following { totalCount }
+        repositories(first: 100, ownerAffiliations: OWNER, isFork: false) {
+          totalCount
+          nodes { stargazerCount }
+        }
+      }
     }
-    return res.json();
-  })
-  .then(function(result: any) {
-    if (result.errors && result.errors.length > 0) {
-      throw new Error(result.errors[0].message);
+  `;
+
+  const user = await fetchGH(query, { login: username });
+  const stars = user.repositories.nodes.reduce((s: number, r: any) => s + r.stargazerCount, 0);
+
+  return {
+    name: user.name || user.login,
+    login: user.login,
+    followers: user.followers.totalCount,
+    following: user.following.totalCount,
+    publicRepos: user.repositories.totalCount,
+    stars,
+  };
+}
+
+/** Fetch and calculate contribution streaks using calendar data */
+export async function fetchStreak(username: string): Promise<StreakData> {
+  const query = `
+    query($login: String!) {
+      user(login: $login) {
+        contributionsCollection {
+          contributionCalendar {
+            totalContributions
+            weeks {
+              contributionDays { contributionCount date }
+            }
+          }
+        }
+      }
     }
+  `;
 
-    var u = result.data.user;
-    var nodes = u.repositories.nodes;
-    var totalStars = 0;
+  const user = await fetchGH(query, { login: username });
+  const calendar = user.contributionsCollection.contributionCalendar;
+  const days = calendar.weeks.flatMap((w: any) => w.contributionDays);
+  const today = new Date().toISOString().split("T")[0];
+  
+  let currentStreak = 0;
+  let longestStreak = 0;
+  let tempStreak = 0;
 
-    // Menggunakan for-loop tradisional (ES3) menggantikan .reduce()
-    for (var i = 0; i < nodes.length; i++) {
-      totalStars += nodes[i].stargazerCount;
+  // Calculate longest streak by iterating through historical days
+  for (const day of days) {
+    if (day.contributionCount > 0) {
+      tempStreak++;
+      if (tempStreak > longestStreak) longestStreak = tempStreak;
+    } else {
+      if (day.date < today) tempStreak = 0;
     }
+  }
 
-    // Mengembalikan objek sesuai interface UserStats
-    return {
-      name: u.name || u.login,
-      login: u.login,
-      followers: u.followers.totalCount,
-      following: u.following.totalCount,
-      publicRepos: u.repositories.totalCount,
-      stars: totalStars
-    };
-  });
+  // Calculate current streak backwards from today with 1-day tolerance
+  for (let i = days.length - 1; i >= 0; i--) {
+    if (days[i].contributionCount > 0) {
+      currentStreak++;
+    } else {
+      if (days[i].date === today) continue; 
+      break;
+    }
+  }
+
+  return {
+    currentStreak,
+    longestStreak,
+    totalContributions: calendar.totalContributions,
+    firstContrib: days.find((d: any) => d.contributionCount > 0)?.date || today,
+    lastContrib: [...days].reverse().find((d: any) => d.contributionCount > 0)?.date || today,
+  };
 }
