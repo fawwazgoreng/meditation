@@ -1,13 +1,16 @@
 {
-  "name": "meditation",
-  "scripts": {
-    "dev": "bun run --hot src/api/index.ts"
-  },
-  "type": "module",
-  "dependencies": {
-    "hono": "^4.12.9"
-  },
-  "devDependencies": {
-    "@types/bun": "latest"
-  }
+    "name": "meditation",
+    "scripts": {
+        "dev": "node api/index.js",
+        "build": "tsc"
+    },
+    "type": "module",
+    "dependencies": {
+        "hono": "^4.12.12"
+    },
+    "devDependencies": {
+        "@types/bun": "latest",
+        "@types/node": "^25.5.2",
+        "typescript": "^6.0.2"
+    }
 }
