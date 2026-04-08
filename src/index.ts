@@ -30,6 +30,7 @@ function getParams(c: any): AppContext | null {
 function svgResponse(c: any, svg: string) {
   return c.body(svg, 200, {
     "Content-Type": "image/svg+xml; charset=utf-8",
+    "Content-Disposition": "inline",
     "Cache-Control": "public, max-age=3600, s-maxage=3600",
     "X-Content-Type-Options": "nosniff",
   });
