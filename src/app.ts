@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { prettyJSON } from "hono/pretty-json";
 import { cacheGet, cacheSet } from "./lib/cache.js";
 import { fetchTopLanguages, fetchUserStats, fetchStreak } from "./lib/github.js";
-import { buildTopLangsSVG, buildStreakSVG, buildCardSVG } from "./lib/svg.js";
+import { buildTopLangsSVG, buildStreakSVG, buildCardSVG, buildErrorSVG } from "./lib/svg.js";
 import { chooseTheme } from "./lib/theme.js";
 
 const app = new Hono();
@@ -25,7 +25,7 @@ function svgResponse(c: any, svg: string) {
     return c.body(svg, 200, {
         "Content-Type": "image/svg+xml; charset=utf-8",
         "Content-Disposition": "inline",
-        "Cache-Control": "public, max-age=3600, s-maxage=3600",
+        "Cache-Control": "public, max-age=3600, s-maxage=3600 , stale-while-revalidate=1200",
         "X-Content-Type-Options": "nosniff",
     });
 }
@@ -53,10 +53,27 @@ async function handleRequest(
         const svg = builder(data, theme);
         cacheSet(cacheKey, svg);
         return svgResponse(c, svg);
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        console.error(`[${type.toUpperCase()} ERROR]`, msg);
-        return c.text(`Error: ${msg}`, 502);
+    } catch (err : any) {
+        console.error(`[ERROR ${type}]`, err.message);
+        
+            let status = 500;
+            let errorMsg = "Internal Server Error";
+        
+            if (err.message.includes("not found")) {
+              status = 404;
+              errorMsg = `User '${params.user}' not found`;
+            } else if (err.message.includes("rate limit")) {
+              status = 429;
+              errorMsg = "GitHub Rate Limit Reached";
+            } else if (err.message.includes("timeout") || err.message.includes("fetch")) {
+              status = 504;
+              errorMsg = "GitHub API is slow/down";
+            }
+        
+            return c.body(buildErrorSVG(errorMsg, params.themeName), status, {
+              "Content-Type": "image/svg+xml",
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+            });
     }
 }
 

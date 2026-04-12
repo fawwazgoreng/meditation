@@ -1,0 +1,270 @@
+openapi: 3.0.3
+
+info:
+  title: Meditation GitHub Stats API
+  description: |
+    A serverless API that generates embeddable SVG cards for GitHub profile statistics.
+    All endpoints return cached SVG images suitable for embedding in GitHub READMEs
+    or any web page via `<img>` tags.
+
+    ## Embedding Example
+    ```markdown
+    ![Top Languages](https://meditation-cyan.vercel.app/stats?user=fawwazgoreng&theme=dark)
+    ![Streak](https://meditation-cyan.vercel.app/streak?user=fawwazgoreng)
+    ![Stats Card](https://meditation-cyan.vercel.app/card?user=fawwazgoreng&theme=ocean)
+    ```
+
+    ## Caching
+    All SVG responses are cached for **1 hour** (`Cache-Control: public, max-age=3600`).
+    The cache key is composed of `endpoint + username + theme`.
+
+  version: 1.0.0
+  contact:
+    name: fawwazgoreng
+    url: https://github.com/fawwazgoreng
+
+servers:
+  - url: https://meditation-cyan.vercel.app
+    description: Production (Vercel)
+  - url: http://localhost:3000
+    description: Local development
+
+# ─── Reusable Components ──────────────────────────────────────────────────────
+
+components:
+  parameters:
+    UserParam:
+      name: user
+      in: query
+      required: true
+      description: GitHub username to fetch data for.
+      schema:
+        type: string
+        example: fawwazgoreng
+
+    ThemeParam:
+      name: theme
+      in: query
+      required: false
+      description: |
+        Visual theme for the SVG card. Falls back to `dark` if omitted or if an
+        unrecognized name is provided.
+
+        | Theme | Palette |
+        |---|---|
+        | `dark` | GitHub dark — cyan title, blue accent |
+        | `light` | GitHub light — blue title and accent |
+        | `orv` | Omniscient Reader — gold title, transcendence blue accent |
+        | `pickmeup` | Dark game UI — mana blue title, gacha red accent |
+        | `northernblade` | Pitch black ink — silent night purple |
+        | `galaxy` | Deep space — violet title, cyan accent |
+        | `moonlight` | Midnight slate — sky blue title |
+        | `desert` | Warm sand — golden title, terracotta accent |
+        | `autumn` | Burnt umber — ember orange tones |
+        | `winter` | Deep navy — ice blue tones |
+        | `forest` | Dark green — emerald title and accent |
+        | `volcano` | Dark crimson — red fire tones |
+        | `ocean` | Deep navy — sky blue title and accent |
+        | `sunset` | Dark rose — pink and red tones |
+        | `cyberpunk` | Dark slate — fuchsia title, cyan accent |
+        | `neon` | Pure black — neon green title, cyan accent |
+        | `coffee` | Dark espresso — tan title, brown accent |
+        | `stoic` | Pure black — white monochrome |
+        | `zen` | Cream white — charcoal monochrome |
+      schema:
+        type: string
+        default: dark
+        example: ocean
+        enum:
+          - dark
+          - light
+          - orv
+          - pickmeup
+          - northernblade
+          - galaxy
+          - moonlight
+          - desert
+          - autumn
+          - winter
+          - forest
+          - volcano
+          - ocean
+          - sunset
+          - cyberpunk
+          - neon
+          - coffee
+          - stoic
+          - zen
+
+  responses:
+    SvgResponse:
+      description: SVG image generated successfully.
+      headers:
+        Cache-Control:
+          description: Instructs CDN and browsers to cache the response for 1 hour.
+          schema:
+            type: string
+            example: public, max-age=3600, s-maxage=3600
+        Content-Disposition:
+          schema:
+            type: string
+            example: inline
+        X-Content-Type-Options:
+          schema:
+            type: string
+            example: nosniff
+      content:
+        image/svg+xml:
+          schema:
+            type: string
+            description: Raw SVG markup string.
+            example: '<svg xmlns="http://www.w3.org/2000/svg" width="350" height="200">...</svg>'
+
+    MissingUserError:
+      description: The required `user` query parameter was not provided.
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: "Error: query param 'user' is required."
+
+    UpstreamError:
+      description: |
+        Failed to fetch data from the GitHub GraphQL API.
+        Common causes: invalid username, GitHub API rate limit exceeded,
+        or missing/invalid `GITHUB_TOKEN` server-side configuration.
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: "Error: User not found: invaliduser"
+
+# ─── Tags ────────────────────────────────────────────────────────────────────
+
+tags:
+  - name: Health
+    description: Service availability and status checks.
+  - name: Stats
+    description: GitHub profile statistics rendered as SVG cards.
+
+# ─── Paths ───────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ── Root ──────────────────────────────────────────────────────────────────
+
+  /:
+    get:
+      tags: [Health]
+      summary: Service status
+      description: Returns a JSON object confirming the service is running and lists available endpoints.
+      operationId: getStatus
+      responses:
+        "200":
+          description: Service is active.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: active
+                  endpoints:
+                    type: array
+                    items:
+                      type: string
+                    example: ["/stats", "/streak", "/card"]
+              example:
+                status: active
+                endpoints:
+                  - /stats
+                  - /streak
+                  - /card
+
+  # ── Top Languages ──────────────────────────────────────────────────────────
+
+  /stats:
+    get:
+      tags: [Stats]
+      summary: Top programming languages card
+      description: |
+        Fetches the user's owned (non-forked) repositories via GitHub GraphQL API
+        and aggregates language byte sizes across all repos. Returns up to **8 languages**
+        sorted by usage, rendered as a horizontal progress bar with a legend.
+
+        **SVG dimensions:** 350 × dynamic height (100px base + 25px per language)
+
+        **Cache key:** `stats:{user}:{theme}`
+      operationId: getTopLanguages
+      parameters:
+        - $ref: "#/components/parameters/UserParam"
+        - $ref: "#/components/parameters/ThemeParam"
+      responses:
+        "200":
+          $ref: "#/components/responses/SvgResponse"
+        "400":
+          $ref: "#/components/responses/MissingUserError"
+        "502":
+          $ref: "#/components/responses/UpstreamError"
+
+  # ── Streak ─────────────────────────────────────────────────────────────────
+
+  /streak:
+    get:
+      tags: [Stats]
+      summary: Contribution streak card
+      description: |
+        Fetches the user's GitHub contribution calendar for the current year and
+        calculates three streak metrics displayed as a three-column SVG card:
+
+        - **Total Contributions** — cumulative count for the year
+        - **Current Streak** — consecutive days with at least one contribution (counted backward from today, with 1-day grace period for today)
+        - **Longest Streak** — maximum consecutive days ever recorded in the calendar
+
+        **SVG dimensions:** 350 × 140px (fixed)
+
+        **Cache key:** `streak:{user}:{theme}`
+      operationId: getStreak
+      parameters:
+        - $ref: "#/components/parameters/UserParam"
+        - $ref: "#/components/parameters/ThemeParam"
+      responses:
+        "200":
+          $ref: "#/components/responses/SvgResponse"
+        "400":
+          $ref: "#/components/responses/MissingUserError"
+        "502":
+          $ref: "#/components/responses/UpstreamError"
+
+  # ── Stats Card ─────────────────────────────────────────────────────────────
+
+  /card:
+    get:
+      tags: [Stats]
+      summary: General profile statistics card
+      description: |
+        Fetches general GitHub profile data and renders a 2-column grid card
+        with the following metrics:
+
+        | Metric | Description |
+        |---|---|
+        | Public Repos | Total number of owned (non-forked) public repositories |
+        | Stars Earned | Cumulative stargazer count across all owned repositories |
+        | Followers | Total number of GitHub followers |
+        | Following | Total number of accounts the user follows |
+
+        **SVG dimensions:** 350 × dynamic height (80px base + 40px per row of 2 items)
+
+        **Cache key:** `card:{user}:{theme}`
+      operationId: getStatsCard
+      parameters:
+        - $ref: "#/components/parameters/UserParam"
+        - $ref: "#/components/parameters/ThemeParam"
+      responses:
+        "200":
+          $ref: "#/components/responses/SvgResponse"
+        "400":
+          $ref: "#/components/responses/MissingUserError"
+        "502":
+          $ref: "#/components/responses/UpstreamError"

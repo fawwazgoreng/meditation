@@ -166,3 +166,17 @@ export function buildCardSVG(stats: UserStats, theme: Theme, extra: any[] = []):
     <circle cx="${W - 20}" cy="20" r="3" fill="${theme.green ?? '#3FB950'}" opacity="0.6"/>
   `, theme);
 }
+
+export function buildErrorSVG(message: string, theme: any) {
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="350" height="100">
+      <rect width="350" height="100" rx="14" fill="${theme.bg}" stroke="#ff4444" stroke-width="2"/>
+      <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" fill="#ff4444" font-family="sans-serif" font-weight="bold">
+        Oops! Something went wrong
+      </text>
+      <text x="50%" y="65%" dominant-baseline="middle" text-anchor="middle" fill="${theme.text}" font-family="sans-serif" font-size="12">
+        ${message}
+      </text>
+    </svg>
+  `;
+}

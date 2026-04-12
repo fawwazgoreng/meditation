@@ -28,25 +28,29 @@ export interface StreakData {
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 
 /** Generate standard headers for GitHub API requests */
-const ghHeaders = () => ({
-  "Content-Type": "application/json",
-  "Authorization": GITHUB_TOKEN ? `Bearer ${GITHUB_TOKEN}` : "",
-  "User-Agent": "Meditation-App",
-});
+const ghHeaders = () => {
+    if (!GITHUB_TOKEN) throw new Error("GITHUB_TOKEN environment variable is not set");
+    return {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GITHUB_TOKEN}`,
+        "User-Agent": "Meditation-App",
+    };
+};
 
 /** Generic helper to execute GitHub GraphQL queries */
 async function fetchGH(query: string, variables: object) {
-  const res = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: ghHeaders(),
-    body: JSON.stringify({ query, variables }),
-  });
+    const res = await fetch("https://api.github.com/graphql", {
+        method: "POST",
+        headers: ghHeaders(),
+        body: JSON.stringify({ query, variables }),
+        signal: AbortSignal.timeout(8000),
+    });
 
-  const result = (await res.json()) as any;
-  if (result.errors) throw new Error(result.errors[0].message);
-  if (!result.data || !result.data.user) throw new Error("User not found");
-  
-  return result.data.user;
+    const result = (await res.json()) as any;
+    if (result.errors) throw new Error(result.errors[0].message);
+    if (!result.data || !result.data.user) throw new Error("User not found");
+
+    return result.data.user;
 }
 
 // ─── Functions ───────────────────────────────────────────────────────────────
