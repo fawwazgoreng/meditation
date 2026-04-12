@@ -1,16 +1,16 @@
 {
     "name": "meditation",
     "scripts": {
-        "dev": "node api/index.js",
-        "build": "tsc"
+        "dev": "npx tsx src/app.ts",
+        "build": "tsc --noEmit"
     },
     "type": "module",
     "dependencies": {
         "hono": "^4.12.12"
     },
     "devDependencies": {
-        "@types/bun": "latest",
-        "@types/node": "^25.5.2",
-        "typescript": "^6.0.2"
+        "@types/node": "^25.6.0",
+        "tsx": "^4.0.0",
+        "typescript": "^5.0.0"
     }
 }
