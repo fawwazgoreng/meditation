@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { prettyJSON } from "hono/pretty-json";
-import { cacheGet, cacheSet } from "./lib/cache.ts";
-import { fetchTopLanguages, fetchUserStats, fetchStreak } from "./lib/github.ts";
-import { buildTopLangsSVG, buildStreakSVG, buildCardSVG } from "./lib/svg.ts";
-import { chooseTheme } from "./lib/theme.ts";
+import { cacheGet, cacheSet } from "./lib/cache.js";
+import { fetchTopLanguages, fetchUserStats, fetchStreak } from "./lib/github.js";
+import { buildTopLangsSVG, buildStreakSVG, buildCardSVG } from "./lib/svg.js";
+import { chooseTheme } from "./lib/theme.js";
 
 const app = new Hono();
 
