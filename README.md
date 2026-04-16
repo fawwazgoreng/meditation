@@ -70,6 +70,7 @@ Paste these into any GitHub README:
 ![Top Languages](https://meditation-cyan.vercel.app/stats?user=YOUR_USERNAME&theme=dark)
 ![Streak](https://meditation-cyan.vercel.app/streak?user=YOUR_USERNAME&theme=ocean)
 ![Stats Card](https://meditation-cyan.vercel.app/card?user=YOUR_USERNAME&theme=orv)
+![Activity Graph](https://meditation-cyan.vercel.app/activity?user=YOUR_USERNAME&theme=orv)
 ```
 
 ---
@@ -130,6 +131,7 @@ https://meditation-cyan.vercel.app
 | GET | `/stats` | Top programming languages SVG card |
 | GET | `/streak` | Contribution streak SVG card |
 | GET | `/card` | General profile statistics SVG card |
+| GET | `/activity` | Contribution graph in one month |
 
 ### Query Parameters
 
@@ -149,6 +151,10 @@ curl "https://meditation-cyan.vercel.app/streak?user=fawwazgoreng"
 
 # Stats card with orv theme
 curl "https://meditation-cyan.vercel.app/card?user=fawwazgoreng&theme=orv"
+
+# Activity graph with stoic theme
+curl "https://meditation-cyan.vercel.app/activity?user=fawwazgoreng&theme=stoic"
+
 ```
 
 ---
