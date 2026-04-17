@@ -36,6 +36,8 @@
 ```
 .
 ├── api/
+│   └── api.yaml        # OpenAPI 3.0 specification
+├── docs/
 │   └── index.ts        # Vercel serverless entry point
 ├── src/
 │   ├── app.ts          # Hono app — routes, middleware, handlers
@@ -44,7 +46,6 @@
 │       ├── github.ts   # GitHub GraphQL API fetchers
 │       ├── svg.ts      # SVG card builders
 │       └── theme.ts    # Theme definitions and selector
-├── openapi.yaml        # OpenAPI 3.0 specification
 ├── vercel.json         # Vercel routing config
 ├── tsconfig.json
 └── package.json
